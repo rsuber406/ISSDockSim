@@ -24,7 +24,8 @@ public class FollowCamera : MonoBehaviour
 
     void FollowCameraTarget()
     {
-        Vector3 direction = (target.position - transform.position).normalized;
-        followCamera.transform.position += direction * (offset);
+        Vector3 desiredPosition = target.position - new Vector3(0, 0, offset);
+        transform.position = Vector3.Lerp(transform.position, desiredPosition, transitionSpeed * Time.deltaTime);
+        transform.LookAt(target);
     }
 }

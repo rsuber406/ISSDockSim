@@ -68,6 +68,7 @@ public class ShuttleController : MonoBehaviour
 
     void HandleThrustProportions()
     {
+        if (shuttleRigidbody.isKinematic) return; // exit to eliminate warnings
         if (stageSeparation)
         {
             shuttleRigidbody.AddForce(transform.forward * (totalThrust  * throttleControl));
@@ -85,17 +86,22 @@ public class ShuttleController : MonoBehaviour
 
     void HandleThrottleControl()
     {
-        if (Input.GetKey(KeyCode.LeftShift))
+        if (Input.GetButton("IncreaseThrottle"))
         {
             throttleControl += throttleChangeRate * Time.deltaTime;
         }
 
-        if (Input.GetKey(KeyCode.LeftControl))
+        if (Input.GetButton("DecreaseThrottle"))
         {
             throttleControl -= throttleChangeRate * Time.deltaTime;
         }
 
         if (throttleControl < 0) throttleControl = 0;
         throttleControl = Mathf.Clamp(throttleControl, 0f, 1f);
+    }
+
+  public float ThrottlePercentage()
+    {
+        return throttleControl * 100f;
     }
 }
