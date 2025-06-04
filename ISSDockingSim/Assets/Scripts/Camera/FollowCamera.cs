@@ -2,15 +2,29 @@ using UnityEngine;
 
 public class FollowCamera : MonoBehaviour
 {
+    [Header("Configuration Camera")]
+    public Transform target;
+
+    public float offset;
+    public float transitionSpeed;
+
+    private Camera followCamera;
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
-        
+        followCamera = Camera.main;
+        followCamera.transform.position = target.position - new Vector3(0, 0, offset);
     }
 
     // Update is called once per frame
     void Update()
     {
-        
+        FollowCameraTarget();
+    }
+
+    void FollowCameraTarget()
+    {
+        Vector3 direction = (target.position - transform.position).normalized;
+        followCamera.transform.position += direction * (offset);
     }
 }
