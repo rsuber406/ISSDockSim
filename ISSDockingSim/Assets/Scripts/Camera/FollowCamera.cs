@@ -17,7 +17,7 @@ public class FollowCamera : MonoBehaviour
     }
 
     // Update is called once per frame
-    void Update()
+    void FixedUpdate()
     {
         FollowCameraTarget();
     }
@@ -25,7 +25,7 @@ public class FollowCamera : MonoBehaviour
     void FollowCameraTarget()
     {
         Vector3 desiredPosition = target.position - new Vector3(0, 0, offset);
-        transform.position = Vector3.Lerp(transform.position, desiredPosition, transitionSpeed * Time.deltaTime);
+        transform.position = Vector3.Slerp(transform.position, desiredPosition, transitionSpeed * Time.deltaTime);
         transform.LookAt(target);
     }
 }

@@ -26,7 +26,7 @@ RenderSettings:
   m_AmbientIntensity: 1
   m_AmbientMode: 0
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
-  m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
+  m_SkyboxMaterial: {fileID: 2100000, guid: 1ecd64d0dbb755a4e9c176a022818a0d, type: 2}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
   m_FlareFadeSpeed: 3
@@ -508,6 +508,14 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 6024300681663078914, guid: c8067f68e0acc63498b8dcab0f23ecf8, type: 3}
+      propertyPath: m_AngularDrag
+      value: 0.1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6497131635353326225, guid: c8067f68e0acc63498b8dcab0f23ecf8, type: 3}
+      propertyPath: rollSpeed
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 7218369991554091915, guid: c8067f68e0acc63498b8dcab0f23ecf8, type: 3}
       propertyPath: m_Name
       value: SpaceLaunchSystem
@@ -598,6 +606,10 @@ PrefabInstance:
       propertyPath: shuttlePrefab
       value: 
       objectReference: {fileID: 683272364}
+    - target: {fileID: 2699693642321177547, guid: 02f9b62b0c8b16b4badfbf5db0c84871, type: 3}
+      propertyPath: atmosphericMaterial
+      value: 
+      objectReference: {fileID: 2100000, guid: 1ecd64d0dbb755a4e9c176a022818a0d, type: 2}
     - target: {fileID: 3153775787078385436, guid: 02f9b62b0c8b16b4badfbf5db0c84871, type: 3}
       propertyPath: m_SizeDelta.x
       value: 400
