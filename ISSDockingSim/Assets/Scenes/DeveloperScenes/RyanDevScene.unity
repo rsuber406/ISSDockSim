@@ -516,6 +516,10 @@ PrefabInstance:
       propertyPath: rollSpeed
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 6497131635353326225, guid: c8067f68e0acc63498b8dcab0f23ecf8, type: 3}
+      propertyPath: pitchSpeed
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 7218369991554091915, guid: c8067f68e0acc63498b8dcab0f23ecf8, type: 3}
       propertyPath: m_Name
       value: SpaceLaunchSystem
