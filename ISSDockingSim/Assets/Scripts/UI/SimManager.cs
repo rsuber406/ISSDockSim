@@ -6,10 +6,12 @@ public class SimManager : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     private static SimManager instance;
 
+
     [Header("Shuttle References")] [SerializeField]
     public TextMeshProUGUI altitudeText;
-
     [SerializeField] public TextMeshProUGUI throttleText;
+    [SerializeField] public TextMeshProUGUI speedText;
+    [SerializeField] private TextMeshProUGUI maxQDisplay;
     [SerializeField] private GameObject shuttlePrefab;
     private ShuttleController shuttleController;
     private Rigidbody shuttleRigidBody;
@@ -36,6 +38,10 @@ public class SimManager : MonoBehaviour
        
     }
 
+    public static SimManager GetInstance()
+    {
+        return instance;
+    }
     void FixedUpdate()
     {
         UpdateAtmosphere();
@@ -45,6 +51,8 @@ public class SimManager : MonoBehaviour
     {
         UpdateAltitudeElement();
         UpdateThrottleElement();
+        UpdateShuttleSpeedElement();
+        UpdateMaxQDisplay();
     }
 
     void UpdateThrottleElement()
@@ -60,6 +68,42 @@ public class SimManager : MonoBehaviour
         altitudeText.text = $"Altitude: {height} km";
     }
 
+    void UpdateShuttleSpeedElement()
+    {
+        float velocity = shuttleRigidBody.linearVelocity.magnitude;
+        speedText.text = $"Speed: {velocity} m/s";
+    }
+
+    void UpdateMaxQDisplay()
+    {
+        float seaLevelDensity = 1.225f;  
+        float scaleHeight = 60000f;
+        float altitude = shuttleTransform.position.y;
+        float calculateDensity = CalculateAtmosphere(shuttleTransform.position.y);
+        float density = seaLevelDensity * Mathf.Exp(-altitude / scaleHeight);
+        float dynamicPressure = 0.5f * density *
+                     (shuttleRigidBody.linearVelocity.magnitude * shuttleRigidBody.linearVelocity.magnitude);
+        float maxQ = dynamicPressure / 101325f; // this number is translating pascals to atmospheres
+        if (maxQ > 0.30f)
+        {
+            maxQDisplay.color = Color.red;
+            maxQDisplay.text = $"Atmosphere: {maxQ} ";
+            throttleText.color = Color.red;
+        }
+        else if (maxQ >= 0.25f && maxQ < 0.30f)
+        {
+            maxQDisplay.color = Color.yellow;
+            maxQDisplay.text = $"Atmosphere: {maxQ}";
+            throttleText.color = Color.yellow;
+        }
+        else
+        {
+            maxQDisplay.color = Color.green;
+            maxQDisplay.text = $"Atmosphere: {maxQ}";
+        }
+        
+    }
+
     void UpdateAtmosphere()
     {
         float altitude = shuttleTransform.position.y;
@@ -70,12 +114,12 @@ public class SimManager : MonoBehaviour
         
     }
 
-    float CalculateAtmosphere(float altitude)
+   public float CalculateAtmosphere(float altitude)
     {
         // change start to 50,000
         // change end to 80,000
-        float startTransition = 5000f;
-        float endTransition = 8000f;
+        float startTransition = 5500f;
+        float endTransition = 60000f;
 
         if (altitude <= startTransition)
         {
@@ -89,12 +133,21 @@ public class SimManager : MonoBehaviour
         {
             // this is not quite correct, happening too quickly
             float progress = (altitude - startTransition) / (endTransition - startTransition);
-            return 1f - progress;
+            if (progress == 1f)
+            {
+                return 1f - progress;
+            }
+            return 1.22f - progress;
         }
     }
 
     void OnDestroy()
     {
         atmosphericMaterial.SetFloat("_AtmosphereThickness", originalAtmosphereThickness);
+    }
+
+    void AdjustGravity()
+    {
+        
     }
 }

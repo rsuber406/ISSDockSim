@@ -1,29 +1,36 @@
 using UnityEngine;
 using System.Collections.Generic;
+
 public class ShuttleController : MonoBehaviour
 {
     // Start is called once before the first execution of Update after the MonoBehaviour is created
-    [Header("Separation Objects")]
-    [SerializeField] GameObject[] separationObjects;
+    [Header("Separation Objects")] [SerializeField]
+    GameObject[] separationObjects;
 
     [SerializeField] private Transform parentObjectTransform;
 
     [Header("Throttle Controls")] [SerializeField]
     public float throttleChangeRate;
+
     private Rigidbody shuttleRigidbody;
     private List<Rigidbody> separationRigidbodies = new List<Rigidbody>();
     private float totalMass = 0f;
     private float srbThrust = 12500000f;
-    private float ssmeThrust = 1860000f;
+    private float ssmeThrust = 2279000f;
     private float totalThrust;
-    private bool stageSeparation = false;
+    private bool stageOneSeparation = false;
+    private bool stageTwoSeparation = false;
+    private bool JettisonInProgress = false;
     private float throttleControl = 0f;
+    private float originalShuttleMass;
+    private int stageSepCounter = 0;
 
-    [Header("Rotation Control")] 
-    [SerializeField] public float rollSpeed;
+    [Header("Rotation Control")] [SerializeField]
+    public float rollSpeed;
 
     [SerializeField] public float pitchSpeed;
     [SerializeField] public float yawSpeed;
+
     /// <summary>
     ///  295,000 mass for srb
     /// 76,000 for mass fuel tank
@@ -32,6 +39,7 @@ public class ShuttleController : MonoBehaviour
     {
         InitializeShuttleParams();
         totalThrust = srbThrust + ssmeThrust;
+        originalShuttleMass = shuttleRigidbody.mass;
         this.transform.rotation = parentObjectTransform.rotation;
     }
 
@@ -39,19 +47,20 @@ public class ShuttleController : MonoBehaviour
     void Update()
     {
         HandleThrottleControl();
+        if (!JettisonInProgress) HandleJettisonControl();
     }
+
     void FixedUpdate()
     {
         if (Input.GetKey(KeyCode.Space))
         {
-            if(shuttleRigidbody.isKinematic) DeactivateKinematics();
-          
-            
+            if (shuttleRigidbody.isKinematic) DeactivateKinematics();
         }
+
         HandleThrustProportions();
+        CalculateDragForce();
         HandleRollControl();
         HandlePitchControl();
-        HandleJettisonControl();
     }
 
     void InitializeShuttleParams()
@@ -62,20 +71,34 @@ public class ShuttleController : MonoBehaviour
             separationRigidbodies.Add(separationObjects[i].GetComponent<Rigidbody>());
             totalMass += separationRigidbodies[i].mass;
         }
-        totalMass += shuttleRigidbody.mass;
-        shuttleRigidbody.mass = totalMass;
+
+        shuttleRigidbody.mass += totalMass;
     }
 
     float CalculateThrust()
     {
         float combinedThrust = 0;
-        
+
         combinedThrust += ssmeThrust * 3f * throttleControl;
-        if (!stageSeparation)
+        if (!stageOneSeparation)
         {
             combinedThrust += srbThrust;
         }
+
         return combinedThrust;
+    }
+
+    void CalculateDragForce()
+    {
+        Vector3 velocity = shuttleRigidbody.linearVelocity;
+        float altitude = transform.position.y;
+        float density = SimManager.GetInstance().CalculateAtmosphere(altitude);
+        float frontalArea = 500f;
+        float dragCoefficient = 1.2f;
+        float dragMagnitude = 0.5f * density * velocity.sqrMagnitude * dragCoefficient * frontalArea;
+
+        Vector3 dragForce = (-shuttleRigidbody.linearVelocity).normalized * dragMagnitude;
+        shuttleRigidbody.AddForce(dragForce);
     }
 
     void DeactivateKinematics()
@@ -90,9 +113,14 @@ public class ShuttleController : MonoBehaviour
     void HandleThrustProportions()
     {
         if (shuttleRigidbody.isKinematic) return; // exit to eliminate warnings
-        if (stageSeparation)
+        if (stageTwoSeparation)
         {
-            shuttleRigidbody.AddForce(transform.forward * (CalculateThrust()),ForceMode.Force);
+            shuttleRigidbody.AddForce(transform.forward * (CalculateThrust()), ForceMode.Force);
+        }
+        else if (stageOneSeparation)
+        {
+            shuttleRigidbody.AddForce(transform.forward * (CalculateThrust()), ForceMode.Force);
+            separationRigidbodies[0].linearVelocity = shuttleRigidbody.linearVelocity;
         }
         else
         {
@@ -121,7 +149,7 @@ public class ShuttleController : MonoBehaviour
         throttleControl = Mathf.Clamp(throttleControl, 0f, 1f);
     }
 
-  public float ThrottlePercentage()
+    public float ThrottlePercentage()
     {
         return throttleControl * 100f;
     }
@@ -130,7 +158,7 @@ public class ShuttleController : MonoBehaviour
     {
         float rollTorque = 0f;
         if (shuttleRigidbody.isKinematic) return;
-        if (!stageSeparation && Input.GetButton("Horizontal"))
+        if (!stageTwoSeparation && Input.GetButton("Horizontal"))
         {
             if (Input.GetButton("Horizontal") && Input.GetKey(KeyCode.A)) rollTorque = 50;
             else if (Input.GetButton("Horizontal") && Input.GetKey(KeyCode.D)) rollTorque = -50;
@@ -138,34 +166,32 @@ public class ShuttleController : MonoBehaviour
             Quaternion combinedRotation = parentObjectTransform.rotation * rollRotation;
             parentObjectTransform.rotation = Quaternion.Slerp(parentObjectTransform.rotation, combinedRotation,
                 Time.fixedDeltaTime * 0.2f);
-
         }
-       else
+        else
         {
-            
             if (Input.GetButton("Horizontal") && Input.GetKey(KeyCode.A)) rollTorque = -1f;
             else if (Input.GetButton("Horizontal") && Input.GetKey(KeyCode.D)) rollTorque = 1f;
             Vector3 rollVector = transform.forward * (rollTorque * this.rollSpeed);
             shuttleRigidbody.AddTorque(rollVector);
-            
         }
     }
 
     void HandlePitchControl()
     {
         float pitchTorque = 0f;
-        if (!stageSeparation && Input.GetButton("Vertical"))
+        if (!stageOneSeparation && Input.GetButton("Vertical"))
         {
-            if(Input.GetKey(KeyCode.W)) pitchTorque = 50;
-            else if(Input.GetKey(KeyCode.S)) pitchTorque = -50;
+            if (Input.GetKey(KeyCode.W)) pitchTorque = 50;
+            else if (Input.GetKey(KeyCode.S)) pitchTorque = -50;
             Quaternion pitchRotation = Quaternion.Euler(pitchTorque, 1f, 1f);
             Quaternion combindedRotation = parentObjectTransform.rotation * pitchRotation;
-            parentObjectTransform.rotation = Quaternion.Lerp(parentObjectTransform.rotation, combindedRotation, Time.fixedDeltaTime * 0.2f);
+            parentObjectTransform.rotation = Quaternion.Lerp(parentObjectTransform.rotation, combindedRotation,
+                Time.fixedDeltaTime * 0.2f);
         }
-        else if(Input.GetButton("Vertical"))
+        else if (Input.GetButton("Vertical"))
         {
-            if(Input.GetKey(KeyCode.W)) pitchTorque = 1;
-            else if(Input.GetKey(KeyCode.S)) pitchTorque = -1;
+            if (Input.GetKey(KeyCode.W)) pitchTorque = 1;
+            else if (Input.GetKey(KeyCode.S)) pitchTorque = -1;
             Vector3 pitchVector = transform.right * (pitchTorque * pitchSpeed);
             shuttleRigidbody.AddTorque(pitchVector);
         }
@@ -173,14 +199,38 @@ public class ShuttleController : MonoBehaviour
 
     void HandleJettisonControl()
     {
+        if (stageOneSeparation && stageTwoSeparation) return;
         if (Input.GetButtonDown("Jettison"))
         {
-            stageSeparation = true;
-            for (int i = 0; i < separationRigidbodies.Count; i++)
+            stageSepCounter++;
+            switch (stageSepCounter)
             {
-                separationRigidbodies[i].isKinematic = false;
-                separationRigidbodies[i].AddForce(-transform.forward * 3 , ForceMode.Impulse);
+                case 1: SeparateSRB(); break;
+                case 2: SeparateExternalTank(); break;
             }
         }
+
+        JettisonInProgress = false;
     }
+
+    void SeparateSRB()
+    {
+        stageOneSeparation = true;
+        for (int i = 1; i < separationRigidbodies.Count; i++)
+        {
+            separationRigidbodies[i].isKinematic = false;
+            separationRigidbodies[i].AddForce(-transform.forward * 3, ForceMode.Impulse);
+            shuttleRigidbody.mass -= separationRigidbodies[i].mass;
+        }
+    }
+
+    void SeparateExternalTank()
+    {
+        stageTwoSeparation = true;
+        separationRigidbodies[0].isKinematic = false;
+        separationRigidbodies[0].AddForce(-transform.forward * 3, ForceMode.Impulse);
+        shuttleRigidbody.mass = originalShuttleMass;
+    }
+
+    
 }
