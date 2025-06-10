@@ -1,5 +1,9 @@
+using System.Collections;
 using UnityEngine;
 using System.Collections.Generic;
+using System.Numerics;
+using Quaternion = UnityEngine.Quaternion;
+using Vector3 = UnityEngine.Vector3;
 
 public class ShuttleController : MonoBehaviour
 {
@@ -24,6 +28,12 @@ public class ShuttleController : MonoBehaviour
     private float throttleControl = 0f;
     private float originalShuttleMass;
     private int stageSepCounter = 0;
+    private float srbFuelWeight = 1006000f;
+    private float externalTankFuelWeight = 73500f;
+    private float srbBurnRate = 4000f;
+    private float ssmeBurnRate = 500f;
+    private Coroutine fuelBurn = null;
+    private bool srbFuelRemaining = true;
 
     [Header("Rotation Control")] [SerializeField]
     public float rollSpeed;
@@ -31,16 +41,26 @@ public class ShuttleController : MonoBehaviour
     [SerializeField] public float pitchSpeed;
     [SerializeField] public float yawSpeed;
 
+    [Header("Destination")] [SerializeField]
+    public GameObject destination;
+
     /// <summary>
     ///  295,000 mass for srb
     /// 76,000 for mass fuel tank
     /// </summary>
+    
+    
+    // You need to subtract mass from the total mass every second of flight and add bools for srb active and a counter
+    // for seconds so that after 126 seconds, srb thrust is not active and alert the user to perform stage 1 sep
+    // This part of physics is required to achieve appropriate maxQ times and to achieve proper speeds.
     void Start()
     {
         InitializeShuttleParams();
         totalThrust = srbThrust + ssmeThrust;
         originalShuttleMass = shuttleRigidbody.mass;
         this.transform.rotation = parentObjectTransform.rotation;
+        PlatformController.singleton.Init("COM3", 115200);
+        
     }
 
     // Update is called once per frame
@@ -48,6 +68,8 @@ public class ShuttleController : MonoBehaviour
     {
         HandleThrottleControl();
         if (!JettisonInProgress) HandleJettisonControl();
+
+    
     }
 
     void FixedUpdate()
@@ -59,6 +81,7 @@ public class ShuttleController : MonoBehaviour
 
         HandleThrustProportions();
         CalculateDragForce();
+       // PerformGravityTurn(); // feature is cool, does not work well with project and needing more user input
         HandleRollControl();
         HandlePitchControl();
     }
@@ -71,8 +94,10 @@ public class ShuttleController : MonoBehaviour
             separationRigidbodies.Add(separationObjects[i].GetComponent<Rigidbody>());
             totalMass += separationRigidbodies[i].mass;
         }
-
-        shuttleRigidbody.mass += totalMass;
+        totalMass += srbFuelWeight;
+        totalMass += externalTankFuelWeight;
+        totalMass += shuttleRigidbody.mass;
+        shuttleRigidbody.mass = totalMass;
     }
 
     float CalculateThrust()
@@ -80,7 +105,7 @@ public class ShuttleController : MonoBehaviour
         float combinedThrust = 0;
 
         combinedThrust += ssmeThrust * 3f * throttleControl;
-        if (!stageOneSeparation)
+        if (!stageOneSeparation && srbFuelRemaining)
         {
             combinedThrust += srbThrust;
         }
@@ -112,6 +137,10 @@ public class ShuttleController : MonoBehaviour
 
     void HandleThrustProportions()
     {
+        if (fuelBurn == null)
+        {
+            fuelBurn = StartCoroutine(FuelBurnRate());
+        }
         if (shuttleRigidbody.isKinematic) return; // exit to eliminate warnings
         if (stageTwoSeparation)
         {
@@ -232,5 +261,88 @@ public class ShuttleController : MonoBehaviour
         shuttleRigidbody.mass = originalShuttleMass;
     }
 
-    
+    Vector3 CalculateGravityTurn()
+    {
+        float startAlt = 5000f;
+        float endAlt = 20000f;
+        float altitude = this.transform.position.y;
+        if (altitude < startAlt) return Vector3.up;
+
+        else if (altitude < endAlt)
+        {
+
+            float startCurve = 3000f;
+            float endCurve = 25000f;
+            Vector3 issPosition = destination.transform.position;
+            Vector3 shuttlePosition = transform.position;
+        
+            // Create horizontal vector toward ISS
+            Vector3 horizontalToISS = issPosition - shuttlePosition;
+            horizontalToISS.y = 0f; // Force horizontal
+            horizontalToISS = horizontalToISS.normalized;
+        
+            // Smooth transition from vertical to horizontal targeting
+            float progress = (altitude - startCurve) / (endCurve - startCurve);
+            progress = Mathf.SmoothStep(0f, 1f, progress);
+        
+            Vector3 direction = Vector3.Slerp(Vector3.up, horizontalToISS, progress);
+        
+            Debug.Log($"Targeting ISS - Direction: {direction}, Progress: {progress}");
+            return direction.normalized;
+            // This works well enough for simple curve
+            // float progress = (altitude - 5000f) / (20000f - 5000f);
+            // progress = Mathf.SmoothStep(0f, 1f, progress);
+            // float angle = progress * 45f; // 0° to 45° tilt
+            //
+            // Vector3 direction = new Vector3(0.5f, Mathf.Cos(angle * Mathf.Deg2Rad), 0);
+            // direction = direction.normalized;
+            //
+            // Debug.Log($"Simple turn - Altitude: {altitude}, Angle: {angle}, Direction: {direction}");
+            // return direction;
+        }
+        else
+        {
+            return CalculateInterceptTrajectory();
+        }
+    }
+
+    void PerformGravityTurn()
+    {
+        Vector3 gravityTurnDir = CalculateGravityTurn();
+        if (gravityTurnDir.y <= 0f) gravityTurnDir.y = 0.1f;
+        if (stageTwoSeparation)
+        {
+            transform.rotation = Quaternion.LookRotation(gravityTurnDir);
+        }
+
+        Quaternion targetRotation = Quaternion.LookRotation(gravityTurnDir);
+        
+        parentObjectTransform.rotation = Quaternion.Slerp(parentObjectTransform.rotation, targetRotation, 2f * Time.fixedDeltaTime);
+    }
+
+    Vector3 CalculateInterceptTrajectory()
+    {
+        Vector3 direction = (destination.transform.position - transform.position).normalized;
+        direction.y = 0f;
+        return direction.normalized;
+    }
+
+    IEnumerator FuelBurnRate()
+    {
+        if (!stageOneSeparation && !stageTwoSeparation)
+        {
+            shuttleRigidbody.mass -= (srbBurnRate * 2 + ssmeBurnRate);
+        }
+        else if (stageOneSeparation && !stageTwoSeparation)
+        {
+            shuttleRigidbody.mass -= ssmeBurnRate;
+        }
+
+        if (srbFuelWeight <= 0.5f) srbFuelRemaining = false;
+        
+        if(shuttleRigidbody.mass < 78000f) shuttleRigidbody.mass = 78000f;
+
+        yield return new WaitForSeconds(1f);
+        fuelBurn = null;
+    }
 }

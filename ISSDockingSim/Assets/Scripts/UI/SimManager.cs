@@ -77,7 +77,7 @@ public class SimManager : MonoBehaviour
     void UpdateMaxQDisplay()
     {
         float seaLevelDensity = 1.225f;  
-        float scaleHeight = 60000f;
+        float scaleHeight = 30000f;
         float altitude = shuttleTransform.position.y;
         float calculateDensity = CalculateAtmosphere(shuttleTransform.position.y);
         float density = seaLevelDensity * Mathf.Exp(-altitude / scaleHeight);
@@ -118,8 +118,8 @@ public class SimManager : MonoBehaviour
     {
         // change start to 50,000
         // change end to 80,000
-        float startTransition = 5500f;
-        float endTransition = 60000f;
+        float startTransition = 20000f;
+        float endTransition = 30000f;
 
         if (altitude <= startTransition)
         {
